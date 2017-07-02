@@ -22,8 +22,8 @@ class Calibration:
         boardsquaresize = 100
         boardmarkersize = 50
         boardmargin = 20
-        self.boardwidth = 800
-        self.boardheight = 600
+        boardwidth = 800
+        boardheight = 600
         self.markercount = (boardcols*boardrows)/2
 
         self.displaySize = 60
@@ -38,7 +38,7 @@ class Calibration:
         self.calibrationIds = []
 
         self.board = cv2.aruco.CharucoBoard_create(boardcols,boardrows,boardsquaresize,boardmarkersize, self.aruco_dict)
-        self.boardimage = self.board.draw((self.boardwidth,self.boardheight), marginSize=boardmargin)
+        self.boardimage = self.board.draw((boardwidth,boardheight), marginSize=boardmargin)
         cv2.imwrite('calibration_charuco.png', self.boardimage)
 
         self.folder = "calibrationimages"
@@ -53,16 +53,11 @@ class Calibration:
         self.image     = None
         self.grayimage = None
 
-        self.roiY = 4
-        self.roiX = 6
-        self.roiReady = np.zeros((self.roiY, self.roiX));
         self.roiPt0 = (0, 0)
-        self.roiPt1 = (0, 0)
-        self.roiWidth = self.imageWidth / (self.roiX + 1) * 2
-        self.roiHeight = self.imageHeight / (self.roiY + 1) * 2
-        self.roiCurr = [0, 0]
-        self.setROI()
+        self.roiPt1 = (0,0)
+        self.resetROI()
 
+        self.savenext = False
         self.calibrated = False
         self.exit = False
 
@@ -73,52 +68,10 @@ class Calibration:
         self.undistort = True
         return
 
-
-    def nextUnreadyROI(self):
-        self.nextROI()
-        while self.isROIReady():
-            self.nextROI()
-            if self.allROIReady():
-                self.resetROI()
-                break;
-        return
-
-
-    def allROIReady(self):
-        return len(np.where(self.roiReady == 0)[0]) == 0
-
-
-    def nextROI(self):
-        self.roiCurr[0] += 1
-        if self.roiCurr[0] % self.roiX == 0:
-            self.roiCurr[0] = 0
-            self.roiCurr[1] += 1
-            if self.roiCurr[1] % self.roiY == 0:
-                self.roiCurr[1] = 0
-        self.setROI()
-        return
-
-
-    def setROI(self):
-        pt0 = 0 + int(self.roiWidth/2 * self.roiCurr[0])
-        pt1 = 0 + int(self.roiHeight/2 * self.roiCurr[1])
-        self.roiPt0 = (pt0, pt1)
-        pt0 = self.roiWidth + (self.roiWidth/2 * self.roiCurr[0]) - 1
-        pt1 = self.roiHeight + (self.roiHeight/2 * self.roiCurr[1]) - 1
-        self.roiPt1 = (pt0, pt1)
-        #print "roi:", self.roiCurr, self.roiPt0, self.roiPt1
-        return
-
-
+    # Reset the Region Of Interest to the whole image
     def resetROI(self):
         self.roiPt0 = (0, 0)
         self.roiPt1 = (self.imageWidth-1, self.imageHeight-1)
-        #print "roi:", "All", self.roiPt0, self.roiPt1
-        return
-
-
-    def isROIReady(self):
-        return self.roiReady[self.roiCurr[1], self.roiCurr[0]] == 1
 
     def scan(self):
         # Get the ROI
@@ -132,7 +85,7 @@ class Calibration:
         return
 
 
-    def allFound(self):
+    def foundAllMarkers(self):
         return len(self.corners)==self.markercount and len(self.ids)==self.markercount
 
     def draw(self):
@@ -192,17 +145,8 @@ class Calibration:
 
             self.scan()
             foundmsg = ""
-            if self.allFound():
-                foundmsg = "All Found"
-                #if regex match
-                p = re.compile('(\d)_(\d)\.jpg')
-                m = p.match(fn)
-                if m:
-                    #print 'Match found: ', m.group(0), m.group(1), m.group(2)
-                    roiX = int(m.group(2))
-                    roiY = int(m.group(1))
-                    self.roiReady[roiY, roiX] = 1
-
+            if self.foundAllMarkers():
+                foundmsg = "Found All Markers"
                 retval, charucoCorners, charucoIds = aruco.interpolateCornersCharuco(self.corners, self.ids, self.grayimage, self.board)
                 if charucoCorners is not None and charucoIds is not None and len(charucoCorners)>3:
                     self.calibrationCorners.append(charucoCorners)
@@ -214,27 +158,18 @@ class Calibration:
             print fn, foundmsg
             cv2.waitKey(25)
 
-        print self.roiReady
 
-        if self.allROIReady():
-            # Ready to calibrate when all calibration image have been processed.
-            print "Calibrating..."
-            try:
-                retval, self.cameraMatrix, self.distCoefs, self.rvecs, self.tvecs = aruco.calibrateCameraCharuco(self.calibrationCorners, self.calibrationIds, self.board, self.grayimage.shape,None,None)
-                #print(retval, cameraMatrix, distCoeffs, rvecs, tvecs)
-                print "Calibration successful"
-                self.calibrated = True
-            except:
-                print "Calibration failed"
-                exit()
+        # Ready to calibrate when all calibration image have been processed.
+        print "Calibrating..."
+        try:
+            retval, self.cameraMatrix, self.distCoefs, self.rvecs, self.tvecs = aruco.calibrateCameraCharuco(self.calibrationCorners, self.calibrationIds, self.board, self.grayimage.shape,None,None)
+            #print(retval, cameraMatrix, distCoeffs, rvecs, tvecs)
+            print "Calibration successful"
+            self.calibrated = True
+        except:
+            print "Calibration failed"
+            exit()
         return
-
-
-    def checkCalibrationFiles(self):
-        listdir = os.listdir(self.folder)
-        found = len(listdir)
-        print found,"images found."
-        return found == (self.roiX * self.roiY)
 
 
 if __name__ == "__main__":
@@ -247,50 +182,43 @@ if __name__ == "__main__":
     print "***************************************"
 
     cv2.namedWindow("Calibration")
-
     cal = Calibration()
-    cal.calibrate()
-
-    cal.setROI()
-    cal.nextUnreadyROI()
+    print "CharucoBoard markercount:"+str(cal.markercount)
 
     while not cal.exit:
         # Get the next frame.
         cal.getFrame()
+
         if cal.calibrated:
             if cal.undistort:
                 # Undistort the image
                 h,  w = cal.image.shape[:2]
                 newcameramtx, roi = cv2.getOptimalNewCameraMatrix(cal.cameraMatrix, cal.distCoefs, (w, h), 1, (w, h))
+
                 cal.image = cv2.undistort(cal.image, cal.cameraMatrix, cal.distCoefs, None, newcameramtx)
 
-        else:
-            if cal.allROIReady():
-                cal.calibrate()
+                print roi
+                #Draw region of interest
+                cv2.rectangle(cal.image, (roi[2], roi[0]), (roi[3], roi[1]), cal.COLOR_PURPLE, 2)
 
-            else:
-                # Scan the ROI
+        else:
+            # Scan the ROI
+            cal.scan()
+            # If all markers found.
+            if cal.foundAllMarkers():
+                # Now scan the whole image.
+                cal.resetROI()
                 cal.scan()
                 # If all markers found.
-                if cal.allFound():
-                    print "found all in ROI"
-                    # Now scan the whole image.
-                    cal.resetROI()
-                    cal.scan()
-                    # If all markers found.
-                    if cal.allFound():
-                        print "found all in whole image"
-                        # Set the ROI as ready for calibration
-                        cal.roiReady[cal.roiCurr[1], cal.roiCurr[0]] = 1
-
+                if cal.foundAllMarkers():
+                    if cal.savenext:
                         # Save image
-                        fn = cal.folder+"/"+str(cal.roiCurr[1])+"_"+str(cal.roiCurr[0])+".jpg"
+                        fn = cal.folder+"/"+time.strftime("%Y%m%d%H%M%S")+".jpg"
                         cv2.imwrite(fn, cal.image)
                         print "wrote",fn
+                        cal.savenext = False
 
-                        # Next region
-                        cal.nextUnreadyROI()
-                cal.draw()
+            cal.draw()
 
         # Display the image or frame of video
         cal.resize()
@@ -299,11 +227,18 @@ if __name__ == "__main__":
         # Handle any command key presses.
         key = cv2.waitKey(1)
         if key & 0xFF == ord('q') or key == 27: # q or Esc to exit
-            break
+            cal.exit = True
+
         elif key & 0xFF == ord('u'):            # u to toggle undistorting the image once calibrated.
             cal.undistort = not cal.undistort
+
         elif key & 0xFF == ord(' '):            # [Space] to save next valid image
             print "Save Next."
+            cal.savenext = True
+
+        elif key & 0xFF == ord('c'):            # c to run calibtaion on saved images
+            cal.calibrate()
+
         elif key != 255:
             print "key",key
 
