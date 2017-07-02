@@ -199,7 +199,7 @@ if __name__ == "__main__":
 
                 print roi
                 #Draw region of interest
-                cv2.rectangle(cal.image, (roi[2], roi[0]), (roi[3], roi[1]), cal.COLOR_PURPLE, 2)
+                cv2.rectangle(cal.image, (roi[0], roi[1]), (roi[2], roi[3]), cal.COLOR_PURPLE, 2)
 
         else:
             # Scan the ROI
