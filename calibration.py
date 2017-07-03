@@ -59,13 +59,16 @@ class Calibration:
 
         self.savenext = False
         self.calibrated = False
+        self.undistort = True
         self.exit = False
 
         self.cameraMatrix = None
         self.distCoefs = None
         self.rvecs = None
         self.tvecs = None
-        self.undistort = True
+        self.newcameramtx = None
+        self.roi = None
+
         return
 
     # Reset the Region Of Interest to the whole image
@@ -164,6 +167,10 @@ class Calibration:
         try:
             retval, self.cameraMatrix, self.distCoefs, self.rvecs, self.tvecs = aruco.calibrateCameraCharuco(self.calibrationCorners, self.calibrationIds, self.board, self.grayimage.shape,None,None)
             #print(retval, cameraMatrix, distCoeffs, rvecs, tvecs)
+
+            self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(self.cameraMatrix, self.distCoefs, (self.imageWidth, self.imageHeight), 1, (self.imageWidth, self.imageHeight))
+            #print(self.newcameramtx, self.roi)
+
             print "Calibration successful"
             self.calibrated = True
         except:
@@ -179,6 +186,8 @@ if __name__ == "__main__":
     print "Q or Esc to exit"
     print "U to toggle undistorting"
     print "[Space] to save the next valid image"
+    print "C to calibrate"
+    print "R to reset"
     print "***************************************"
 
     cv2.namedWindow("Calibration")
@@ -192,14 +201,10 @@ if __name__ == "__main__":
         if cal.calibrated:
             if cal.undistort:
                 # Undistort the image
-                h,  w = cal.image.shape[:2]
-                newcameramtx, roi = cv2.getOptimalNewCameraMatrix(cal.cameraMatrix, cal.distCoefs, (w, h), 1, (w, h))
+                cal.image = cv2.undistort(cal.image, cal.cameraMatrix, cal.distCoefs, None, cal.newcameramtx)
 
-                cal.image = cv2.undistort(cal.image, cal.cameraMatrix, cal.distCoefs, None, newcameramtx)
-
-                print roi
                 #Draw region of interest
-                cv2.rectangle(cal.image, (roi[0], roi[1]), (roi[2], roi[3]), cal.COLOR_PURPLE, 2)
+                cv2.rectangle(cal.image, (cal.roi[0], cal.roi[1]), (cal.roi[2], cal.roi[3]), cal.COLOR_PURPLE, 2)
 
         else:
             # Scan the ROI
@@ -238,6 +243,9 @@ if __name__ == "__main__":
 
         elif key & 0xFF == ord('c'):            # c to run calibtaion on saved images
             cal.calibrate()
+
+        elif key & 0xFF == ord('r'):            # r to reset
+            cal.calibrated = False
 
         elif key != 255:
             print "key",key
