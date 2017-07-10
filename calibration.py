@@ -146,8 +146,7 @@ class Calibration:
         self.grayimage = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         return
 
-
-    def calibrate(self):
+    def loadimages(self):
         self.calibrationCorners = []
         self.calibrationIds = []
         print "Reading image files..."
@@ -186,8 +185,12 @@ class Calibration:
             print fn, foundmsg
             cv2.waitKey(25)
 
+        return
 
-        # Ready to calibrate when all calibration image have been processed.
+    def calibrate(self):
+        self.loadimages()
+
+        # Ready to calibrate.
         print "Calibrating..."
         try:
             retval, self.cameraMatrix, self.distCoefs, self.rvecs, self.tvecs = aruco.calibrateCameraCharuco(self.calibrationCorners, self.calibrationIds, self.board, self.grayimage.shape,None,None)
@@ -212,6 +215,7 @@ if __name__ == "__main__":
     print "U to toggle undistorting"
     print "[Space] to save the next valid image"
     print "C to calibrate"
+    print "L to load or reload images"
     print "R to reset"
     print "***************************************"
 
@@ -219,7 +223,7 @@ if __name__ == "__main__":
     cal = Calibration()
     #print "CharucoBoard markercount:"+str(cal.markercount)
 
-    #cal.calibrate()
+    cal.loadimages()
 
     while not cal.exit:
         # Get the next frame.
@@ -283,6 +287,9 @@ if __name__ == "__main__":
 
         elif key & 0xFF == ord('r'):            # r to reset
             cal.calibrated = False
+
+        elif key & 0xFF == ord('l'):            # l to reload images
+            cal.loadimages()
 
         elif key != 255 and key != -1:
             print "key",key
