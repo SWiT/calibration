@@ -3,7 +3,7 @@
 import cv2, os, time, re
 import cv2.aruco as aruco
 import numpy as np
-
+import json
 
 
 class Calibration:
@@ -149,7 +149,7 @@ class Calibration:
     def loadimages(self):
         self.calibrationCorners = []
         self.calibrationIds = []
-        print "Reading image files..."
+        print "Loading image files..."
 
         if not os.path.isdir(self.folder):
             os.mkdir(self.folder)
@@ -165,6 +165,7 @@ class Calibration:
             return()
 
         listdir.sort()
+        foundallcount = 0
         self.resetROI()
         for fn in listdir:
             fullpath = self.folder + "/" + fn
@@ -178,13 +179,15 @@ class Calibration:
                 if self.charucoCorners is not None and self.charucoIds is not None and len(self.charucoCorners)>3:
                     self.calibrationCorners.append(self.charucoCorners)
                     self.calibrationIds.append(self.charucoIds)
+                foundallcount += 1
 
             else:
                 foundmsg = "corners",len(self.corners),"ids",len(self.ids)
             self.display()
             print fn, foundmsg
-            cv2.waitKey(25)
+            cv2.waitKey(10)
 
+        print foundallcount,"images loaded."
         return
 
     def calibrate(self):
@@ -206,24 +209,63 @@ class Calibration:
             exit()
         return
 
+    def saveconfig(self):
+        if self.calibrated:
+            print "cameraMatrix"
+            print type(self.cameraMatrix)
+            print self.cameraMatrix
+            print "distCoefs"
+            print type(self.distCoefs)
+            print self.distCoefs
+            print "newcameramtx"
+            print type(self.newcameramtx)
+            print self.newcameramtx
+            np.savez('calibration.npz', cameraMatrix=self.cameraMatrix, distCoefs=self.distCoefs, newcameramtx=self.newcameramtx)
+            print "calibration.npz saved."
+        else:
+            print "Not calibrated. Press 'C' to calibrate."
+        return
+
+
+    def loadconfig(self):
+        if not os.path.exists('calibration.npz'):
+            print "calibration.npz not found."
+            return
+
+        data = np.load('calibration.npz')
+
+        self.cameraMatrix = data['cameraMatrix']
+        self.distCoefs = data['distCoefs']
+        self.newcameramtx = data['newcameramtx']
+
+        print "cameraMatrix"
+        print type(self.cameraMatrix)
+        print self.cameraMatrix
+        print "distCoefs"
+        print type(self.distCoefs)
+        print self.distCoefs
+        print "newcameramtx"
+        print type(self.newcameramtx)
+        print self.newcameramtx
+        print "calibration.npz loaded."
+        return
 
 if __name__ == "__main__":
     print "***************************************"
     print "SWiT's Camera Lens Calibration Script"
     print "***************************************"
     print "Q or Esc to exit"
-    print "U to toggle undistorting"
     print "[Space] to save the next valid image"
-    print "C to calibrate"
     print "L to load or reload images"
+    print "C to calibrate"
+    print "U to toggle undistorting"
     print "R to reset"
+    print "S to save calibration.npz"
+    print "F to load calibration.npz"
     print "***************************************"
 
     cv2.namedWindow("Calibration")
     cal = Calibration()
-    #print "CharucoBoard markercount:"+str(cal.markercount)
-
-    cal.loadimages()
 
     while not cal.exit:
         # Get the next frame.
@@ -234,8 +276,9 @@ if __name__ == "__main__":
                 # Undistort the image
                 cal.image = cv2.undistort(cal.image, cal.cameraMatrix, cal.distCoefs, None, cal.newcameramtx)
 
-                #Draw region of interest
-                cv2.rectangle(cal.image, (cal.roi[0], cal.roi[1]), (cal.roi[2], cal.roi[3]), cal.COLOR_PURPLE, 2)
+                if cal.roi is not None:
+                    #Draw region of interest
+                    cv2.rectangle(cal.image, (cal.roi[0], cal.roi[1]), (cal.roi[2], cal.roi[3]), cal.COLOR_PURPLE, 2)
 
         else:
             # Scan the ROI
@@ -290,6 +333,13 @@ if __name__ == "__main__":
 
         elif key & 0xFF == ord('l'):            # l to reload images
             cal.loadimages()
+
+        elif key & 0xFF == ord('s'):            # s to save the calibration data to config.json
+            cal.saveconfig()
+
+        elif key & 0xFF == ord('f'):            # f to load the calibration data from calibration.npz
+            cal.loadconfig()
+            cal.calibrated = True
 
         elif key != 255 and key != -1:
             print "key",key

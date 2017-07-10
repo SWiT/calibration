@@ -7,4 +7,4 @@ Then print out a copy of the charuco_board.png image.
 
 Use 'Spacebar' to save good images where all the symbols were read. 
 
-Save 10-20 images the press 'C' to attempt a calibration.
+Save 20-40 images then press 'C' to attempt calibration.
