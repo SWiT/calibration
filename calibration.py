@@ -166,7 +166,6 @@ class Calibration:
 
         listdir.sort()
         foundallcount = 0
-        self.resetROI()
         for fn in listdir:
             fullpath = self.folder + "/" + fn
             self.image = cv2.imread(fullpath)
@@ -209,17 +208,24 @@ class Calibration:
             exit()
         return
 
+    def printCameraData(self):
+        print "cameraMatrix"
+        print type(self.cameraMatrix)
+        print self.cameraMatrix
+        print
+        print "distCoefs"
+        print type(self.distCoefs)
+        print self.distCoefs
+        print
+        print"newcameramtx"
+        print type(self.newcameramtx)
+        print self.newcameramtx
+        print
+        return
+
     def saveconfig(self):
         if self.calibrated:
-            print "cameraMatrix"
-            print type(self.cameraMatrix)
-            print self.cameraMatrix
-            print "distCoefs"
-            print type(self.distCoefs)
-            print self.distCoefs
-            print "newcameramtx"
-            print type(self.newcameramtx)
-            print self.newcameramtx
+            self.printCameraData()
             np.savez('calibration.npz', cameraMatrix=self.cameraMatrix, distCoefs=self.distCoefs, newcameramtx=self.newcameramtx)
             print "calibration.npz saved."
         else:
@@ -233,20 +239,10 @@ class Calibration:
             return
 
         data = np.load('calibration.npz')
-
         self.cameraMatrix = data['cameraMatrix']
         self.distCoefs = data['distCoefs']
         self.newcameramtx = data['newcameramtx']
-
-        print "cameraMatrix"
-        print type(self.cameraMatrix)
-        print self.cameraMatrix
-        print "distCoefs"
-        print type(self.distCoefs)
-        print self.distCoefs
-        print "newcameramtx"
-        print type(self.newcameramtx)
-        print self.newcameramtx
+        self.printCameraData()
         print "calibration.npz loaded."
         return
 
@@ -283,29 +279,17 @@ if __name__ == "__main__":
         else:
             # Scan the ROI
             cal.scan()
-            #print "--------------"
-            #print "ids",len(cal.ids)
-            #print "corners",len(cal.corners)
 
             if len(cal.ids) > 0:
                 retval, charucoCorners, charucoIds = aruco.interpolateCornersCharuco(cal.corners, cal.ids, cal.grayimage, cal.board)
-                #if charucoCorners is not None and charucoIds is not None:
-                #    print "charucoCorners",len(charucoCorners)
-                #    print "charucoIds",len(charucoIds)
 
             # If all markers found.
-            if cal.foundAllMarkers():
-                # Now scan the whole image.
-                cal.resetROI()
-                cal.scan()
-                # If all markers found.
-                if cal.foundAllMarkers():
-                    if cal.savenext:
-                        # Save image
-                        fn = cal.folder+"/"+time.strftime("%Y%m%d%H%M%S")+".png"
-                        cv2.imwrite(fn, cal.image)
-                        print "wrote",fn
-                        cal.savenext = False
+            if cal.foundAllMarkers() and cal.savenext:
+                # Save image
+                fn = cal.folder+"/"+time.strftime("%Y%m%d%H%M%S")+".png"
+                cv2.imwrite(fn, cal.image)
+                print "wrote",fn
+                cal.savenext = False
 
             cal.draw()
 
