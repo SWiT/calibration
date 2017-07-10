@@ -13,15 +13,16 @@ class Calibration:
         self.COLOR_LBLUE = (255, 200, 100)
         self.COLOR_GREEN = (0,240,0)
         self.COLOR_RED = (0,0,255)
+        self.COLOR_DRED = (0,0,139)
         self.COLOR_YELLOW = (29,227,245)
         self.COLOR_PURPLE = (224,27,217)
         self.COLOR_GRAY = (127,127,127)
 
-        boardcols = 5
-        boardrows = 4
+        boardcols = 7
+        boardrows = 6
         boardsquaresize = 100
-        boardmarkersize = 50
-        boardmargin = 20
+        boardmarkersize = 80
+        boardmargin = 0
         boardwidth = 800
         boardheight = 600
         self.markercount = (boardcols*boardrows)/2
@@ -38,10 +39,10 @@ class Calibration:
         self.calibrationIds = []
 
         self.board = cv2.aruco.CharucoBoard_create(boardcols,boardrows,boardsquaresize,boardmarkersize, self.aruco_dict)
-        self.boardimage = self.board.draw((boardwidth,boardheight), marginSize=boardmargin)
-        cv2.imwrite('calibration_charuco.png', self.boardimage)
+        self.boardimage = self.board.draw((boardwidth,boardheight), marginSize=boardmargin, borderBits=1 )
+        cv2.imwrite('charuco_board.png', self.boardimage)
 
-        self.folder = "calibrationimages"
+        self.folder = "images"
 
         # Create the capture object
         self.imageWidth = 1920
@@ -69,6 +70,9 @@ class Calibration:
         self.newcameramtx = None
         self.roi = None
 
+        self.charucoCorners = None
+        self.charucoIds = None
+
         return
 
     # Reset the Region Of Interest to the whole image
@@ -85,23 +89,41 @@ class Calibration:
         if self.corners is None or self.ids is None:
             self.ids = np.array([])
             self.corners = np.array([])
+            self.charucoCorners = np.array([])
+            self.charucoIds = np.array([])
+        else:
+            retval, self.charucoCorners, self.charucoIds = aruco.interpolateCornersCharuco(self.corners, self.ids, self.grayimage, self.board)
         return
 
 
     def foundAllMarkers(self):
         return len(self.corners)==self.markercount and len(self.ids)==self.markercount
 
+
     def draw(self):
         # Get the ROI.
         roi = self.image[self.roiPt0[1]:self.roiPt1[1],self.roiPt0[0]:self.roiPt1[0]]
+
         # Draw detected markers.
-        aruco.drawDetectedMarkers(roi, self.corners, self.ids)
+        aruco.drawDetectedMarkers(roi, self.corners)
+
         # Put the ROI back.
         self.image[self.roiPt0[1]:self.roiPt1[1],self.roiPt0[0]:self.roiPt1[0]] = roi
 
+        #Draw the detected Charuco corners.
+        aruco.drawDetectedCornersCharuco(self.image, self.charucoCorners, cornerColor=self.COLOR_BLUE)
+
+        #Draw the detected calibration points.
+        for idx, corners in enumerate(self.calibrationCorners):
+            #print idx
+            #aruco.drawDetectedCornersCharuco(self.image, self.calibrationCorners[idx], self.calibrationIds[idx], self.COLOR_LBLUE)
+            aruco.drawDetectedCornersCharuco(self.image, self.calibrationCorners[idx], cornerColor=self.COLOR_LBLUE)
+
+        return
         #Draw region of interest
         cv2.rectangle(self.image, self.roiPt0, self.roiPt1, self.COLOR_PURPLE, 2)
-        return
+
+
 
 
     def resize(self):
@@ -139,6 +161,10 @@ class Calibration:
                 print "created "+self.folder+"/"
 
         listdir = os.listdir(self.folder)
+        if len(listdir) == 0:
+            print "No image files found in "+self.folder+"/"
+            return()
+
         listdir.sort()
         self.resetROI()
         for fn in listdir:
@@ -150,10 +176,9 @@ class Calibration:
             foundmsg = ""
             if self.foundAllMarkers():
                 foundmsg = "Found All Markers"
-                retval, charucoCorners, charucoIds = aruco.interpolateCornersCharuco(self.corners, self.ids, self.grayimage, self.board)
-                if charucoCorners is not None and charucoIds is not None and len(charucoCorners)>3:
-                    self.calibrationCorners.append(charucoCorners)
-                    self.calibrationIds.append(charucoIds)
+                if self.charucoCorners is not None and self.charucoIds is not None and len(self.charucoCorners)>3:
+                    self.calibrationCorners.append(self.charucoCorners)
+                    self.calibrationIds.append(self.charucoIds)
 
             else:
                 foundmsg = "corners",len(self.corners),"ids",len(self.ids)
@@ -192,7 +217,9 @@ if __name__ == "__main__":
 
     cv2.namedWindow("Calibration")
     cal = Calibration()
-    print "CharucoBoard markercount:"+str(cal.markercount)
+    #print "CharucoBoard markercount:"+str(cal.markercount)
+
+    #cal.calibrate()
 
     while not cal.exit:
         # Get the next frame.
@@ -209,6 +236,16 @@ if __name__ == "__main__":
         else:
             # Scan the ROI
             cal.scan()
+            #print "--------------"
+            #print "ids",len(cal.ids)
+            #print "corners",len(cal.corners)
+
+            if len(cal.ids) > 0:
+                retval, charucoCorners, charucoIds = aruco.interpolateCornersCharuco(cal.corners, cal.ids, cal.grayimage, cal.board)
+                #if charucoCorners is not None and charucoIds is not None:
+                #    print "charucoCorners",len(charucoCorners)
+                #    print "charucoIds",len(charucoIds)
+
             # If all markers found.
             if cal.foundAllMarkers():
                 # Now scan the whole image.
@@ -218,7 +255,7 @@ if __name__ == "__main__":
                 if cal.foundAllMarkers():
                     if cal.savenext:
                         # Save image
-                        fn = cal.folder+"/"+time.strftime("%Y%m%d%H%M%S")+".jpg"
+                        fn = cal.folder+"/"+time.strftime("%Y%m%d%H%M%S")+".png"
                         cv2.imwrite(fn, cal.image)
                         print "wrote",fn
                         cal.savenext = False
@@ -247,7 +284,7 @@ if __name__ == "__main__":
         elif key & 0xFF == ord('r'):            # r to reset
             cal.calibrated = False
 
-        elif key != 255:
+        elif key != 255 and key != -1:
             print "key",key
 
     #Exit
